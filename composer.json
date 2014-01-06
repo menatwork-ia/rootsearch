@@ -1,0 +1,46 @@
+{
+	"name":"menatwork/rootsearch",
+	"description":"Search over multiple root pages",
+	"keywords":["search","root pages","search engine"],
+	"type":"contao-module",
+	"homepage":"http://www.men-at-work.de",
+	"license":"LGPL-3.0+",
+	"authors":[
+		{
+			"name":"Andreas Isaak",
+			"email":"isaak@men-at-work.de",
+			"homepage":"http://www.men-at-work.de",
+			"role":"Developer"
+		},
+		{
+			"name":"David Maack",
+			"email":"maack@men-at-work.de",
+			"homepage":"http://www.men-at-work.de",
+			"role":"Developer"
+		}
+	],
+	"support":{
+		"email":"contao@men-at-work.de",
+		"issues":"https://github.com/menatwork-ia/rootsearch/issues",
+		"irc":"irc://irc.freenode.org/contao.dev",
+		"source":"https://github.com/menatwork-ia/rootsearch"
+	},
+	"require":{
+		"php":">=5.3",
+		"contao/core":">=3,<4",
+		"contao-community-alliance/composer-installer":"*"
+	},
+	"autoload":{
+		"classmap":["system/"]
+	},
+	"replace":{
+		"contao-legacy/rootsearch":"*"
+	},
+	"extra":{
+		"contao":{
+			"sources":{
+				"system/modules/rootsearch":"system/modules/rootsearch"
+			}
+		}
+	}
+}

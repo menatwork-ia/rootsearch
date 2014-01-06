@@ -5,7 +5,7 @@
  *
  * Copyright (c) 2005-2014 Leo Feyer
  *
- * @package RootSearch
+ * @package rootsearch
  * @link    https://contao.org
  * @license http://www.gnu.org/licenses/lgpl-3.0.html LGPL
  */
@@ -16,5 +16,5 @@
  */
 ClassLoader::addClasses(array
 (
-	'ModuleRootSearch' => 'system/modules/rootSearch/ModuleRootSearch.php',
+	'ModuleRootSearch' => 'system/modules/rootsearch/ModuleRootSearch.php',
 ));

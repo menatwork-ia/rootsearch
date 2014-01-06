@@ -1,11 +1,13 @@
 <?php
 
 /**
- * PHP version 5
- * @copyright  MEN AT WORK 2014
- * @license    http://opensource.org/licenses/lgpl-3.0.html
+ * Contao Open Source CMS
+ *
+ * @copyright  MEN AT WORK 2014 
+ * @package    rootsearch
+ * @license    GNU/LGPL 
+ * @filesource
  */
-
 
 /**
  * Class ModuleSearch
