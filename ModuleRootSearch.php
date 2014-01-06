@@ -1,34 +1,17 @@
-<?php if (!defined('TL_ROOT')) die('You can not access this file directly!');
+<?php
 
 /**
- * TYPOlight webCMS
- * Copyright (C) 2005 Leo Feyer
- *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation, either
- * version 2.1 of the License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program. If not, please visit the Free
- * Software Foundation website at http://www.gnu.org/licenses/.
- *
  * PHP version 5
- * @copyright  Andreas Schempp 2009
- * @author     Andreas Schempp <andreas@schempp.ch>
+ * @copyright  MEN AT WORK 2014
  * @license    http://opensource.org/licenses/lgpl-3.0.html
  */
 
 
 /**
- * Based on ModuleSearch from TYPOlight 2.7.0
+ * Class ModuleSearch
+ * Based on ModuleSearch from Contao 3.1.5
  */
-class ModuleRootSearch extends Module
+class ModuleRootSearch extends \Module
 {
 
 	/**
@@ -36,8 +19,8 @@ class ModuleRootSearch extends Module
 	 * @var string
 	 */
 	protected $strTemplate = 'mod_search';
-	
-	
+
+
 	/**
 	 * Display a wildcard in the back end
 	 * @return string
@@ -46,19 +29,18 @@ class ModuleRootSearch extends Module
 	{
 		if (TL_MODE == 'BE')
 		{
-			$objTemplate = new BackendTemplate('be_wildcard');
+			$objTemplate = new \BackendTemplate('be_wildcard');
 
 			$objTemplate->wildcard = '### MULTI-ROOT WEBSITE SEARCH ###';
 			$objTemplate->title = $this->headline;
 			$objTemplate->id = $this->id;
 			$objTemplate->link = $this->name;
-			$objTemplate->href = 'typolight/main.php?do=modules&amp;act=edit&amp;id=' . $this->id;
+			$objTemplate->href = 'contao/main.php?do=themes&amp;table=tl_module&amp;act=edit&amp;id=' . $this->id;
 
 			return $objTemplate->parse();
 		}
 		
 		$this->searchRoots = deserialize($this->searchRoots);
-		
 		if (!is_array($this->searchRoots) || !count($this->searchRoots))
 			return '';
 
@@ -67,105 +49,106 @@ class ModuleRootSearch extends Module
 
 
 	/**
-	 * Generate module
+	 * Generate the module
 	 */
 	protected function compile()
 	{
-		$this->import('Search');
+		// Mark the x and y parameter as used (see #4277)
+		if (isset($_GET['x']))
+		{
+			\Input::get('x');
+			\Input::get('y');
+		}
 
 		// Trigger the search module from a custom form
-		if (!$_GET['keywords'] && $this->Input->post('FORM_SUBMIT') == 'tl_search')
+		if (!isset($_GET['keywords']) && \Input::post('FORM_SUBMIT') == 'tl_search')
 		{
-			$_GET['keywords'] = $this->Input->post('keywords');
-			$_GET['query_type'] = $this->Input->post('query_type');
-			$_GET['per_page'] = $this->Input->post('per_page');
+			$_GET['keywords'] = \Input::post('keywords');
+			$_GET['query_type'] = \Input::post('query_type');
+			$_GET['per_page'] = \Input::post('per_page');
 		}
 
-		$strKeywords = trim($this->Input->get('keywords'));
+		// Remove insert tags
+		$strKeywords = trim(\Input::get('keywords'));
+		$strKeywords = preg_replace('/\{\{[^\}]*\}\}/', '', $strKeywords);
 
-		// Overwrite default query_type
-		if ($this->Input->get('query_type'))
+		// Overwrite the default query_type
+		if (\Input::get('query_type'))
 		{
-			$this->queryType = $this->Input->get('query_type');
+			$this->queryType = \Input::get('query_type');
 		}
 
-		$objFormTemplate = new FrontendTemplate((($this->searchType == 'advanced') ? 'mod_search_advanced' : 'mod_search_simple'));
+		$objFormTemplate = new \FrontendTemplate((($this->searchType == 'advanced') ? 'mod_search_advanced' : 'mod_search_simple'));
 
+		$objFormTemplate->uniqueId = $this->id;
 		$objFormTemplate->queryType = $this->queryType;
 		$objFormTemplate->keyword = specialchars($strKeywords);
+		$objFormTemplate->keywordLabel = $GLOBALS['TL_LANG']['MSC']['keywords'];
+		$objFormTemplate->optionsLabel = $GLOBALS['TL_LANG']['MSC']['options'];
 		$objFormTemplate->search = specialchars($GLOBALS['TL_LANG']['MSC']['searchLabel']);
 		$objFormTemplate->matchAll = specialchars($GLOBALS['TL_LANG']['MSC']['matchAll']);
 		$objFormTemplate->matchAny = specialchars($GLOBALS['TL_LANG']['MSC']['matchAny']);
-		$objFormTemplate->id = ($GLOBALS['TL_CONFIG']['disableAlias'] && $this->Input->get('id')) ? $this->Input->get('id') : false;
-		$objFormTemplate->action = ampersand($this->Environment->request);
+		$objFormTemplate->id = ($GLOBALS['TL_CONFIG']['disableAlias'] && \Input::get('id')) ? \Input::get('id') : false;
+		$objFormTemplate->action = ampersand(\Environment::get('indexFreeRequest'));
+
+		// Redirect page
+		if ($this->jumpTo && ($objTarget = $this->objModel->getRelated('jumpTo')) !== null)
+		{
+			$objFormTemplate->action = $this->generateFrontendUrl($objTarget->row());
+		}
 
 		$this->Template->form = $objFormTemplate->parse();
 		$this->Template->pagination = '';
 		$this->Template->results = '';
 
-		// Execute search if there are keywords
-		if (strlen($strKeywords) && $strKeywords != '*')
+		// Execute the search if there are keywords
+		if ($strKeywords != '' && $strKeywords != '*' && !$this->jumpTo)
 		{
-			$query_starttime = microtime(true);
-			$arrResults = array();
-			
-			foreach( $this->searchRoots as $rootId )
+			// Get the pages
+			$arrPages = $this->Database->getChildRecords($this->searchRoots, 'tl_page');
+
+			// Return if there are no pages
+			if (!is_array($arrPages) || empty($arrPages))
 			{
-				$arrResult = null;
-				$arrPages = $this->getChildRecords($rootId, 'tl_page');
-	
-				// Continue if there are no pages
-				if (!is_array($arrPages) || count($arrPages) < 1)
+				$this->log('No searchable pages found', 'ModuleSearch compile()', TL_ERROR);
+				return;
+			}
+
+			$arrResult = null;
+			$strChecksum = md5($strKeywords.\Input::get('query_type').$intRootId.$this->fuzzy);
+			$query_starttime = microtime(true);
+			$strCacheFile = 'system/cache/search/' . $strChecksum . '.json';
+
+			// Load the cached result
+			if (file_exists(TL_ROOT . '/' . $strCacheFile))
+			{
+				$objFile = new \File($strCacheFile, true);
+
+				if ($objFile->mtime > time() - 1800)
 				{
-					continue;
+					$arrResult = json_decode($objFile->getContent(), true);
 				}
-	
-				$strChecksum = md5($strKeywords.$this->Input->get('query_type').$rootId);
-	
-				// Load cached result
-				if (file_exists(TL_ROOT . '/system/tmp/' . $strChecksum))
+				else
 				{
-					$objFile = new File('system/tmp/' . $strChecksum);
-	
-					if ($objFile->mtime > time() - 1800)
-					{
-						$arrResult = deserialize($objFile->getContent());
-					}
-					else
-					{
-						$objFile->delete();
-					}
+					$objFile->delete();
 				}
-	
-				// Cache result
-				if (is_null($arrResult))
+			}
+
+			// Cache the result
+			if ($arrResult === null)
+			{
+				try
 				{
-					try
-					{
-						$objSearch = $this->Search->searchFor($strKeywords, ($this->Input->get('query_type') == 'or'), $arrPages);
-						$arrResult = $objSearch->fetchAllAssoc();
-					}
-					catch (Exception $e)
-					{
-						$this->log('Website search failed: ' . $e->getMessage(), 'ModuleSearch compile()', TL_ERROR);
-						$arrResult = array();
-					}
-	
-					$objFile = new File('system/tmp/' . $strChecksum);
-					$objFile->write(serialize($arrResult));
-					$objFile->close();
+					$objSearch = \Search::searchFor($strKeywords, (\Input::get('query_type') == 'or'), $arrPages, 0, 0, $this->fuzzy);
+					$arrResult = $objSearch->fetchAllAssoc();
 				}
-				
-				$objRootPage = $this->Database->prepare("SELECT * FROM tl_page WHERE id=?")->limit(1)->execute($rootId);
-				if (strlen($objRootPage->dns))
+				catch (\Exception $e)
 				{
-					for( $i=0; $i<count($arrResult); $i++ )
-					{
-						$arrResult[$i]['url'] = ($this->Environment->ssl ? 'https://' : 'http://') . $objRootPage->dns . '/' . $arrResult[$i]['url'];
-					}
+					$this->log('Website search failed: ' . $e->getMessage(), 'ModuleSearch compile()', TL_ERROR);
+					$arrResult = array();
 				}
-				
-				$arrResults = array_merge($arrResults, $arrResult);
+
+				\File::putContent($strCacheFile, json_encode($arrResult));
 			}
 
 			$query_endtime = microtime(true);
@@ -175,36 +158,36 @@ class ModuleRootSearch extends Module
 			{
 				$this->import('FrontendUser', 'User');
 
-				foreach ($arrResults as $k=>$v)
+				foreach ($arrResult as $k=>$v)
 				{
 					if ($v['protected'])
 					{
 						if (!FE_USER_LOGGED_IN)
 						{
-							unset($arrResults[$k]);
-							continue;
+							unset($arrResult[$k]);
 						}
-
-						$v['groups'] = deserialize($v['groups']);
-
-						if (is_array($v['groups']) && count(array_intersect($this->User->groups, $v['groups'])) < 1)
+						else
 						{
-							unset($arrResults[$k]);
+							$groups = deserialize($v['groups']);
+
+							if (!is_array($groups) || empty($groups) || !count(array_intersect($groups, $this->User->groups)))
+							{
+								unset($arrResult[$k]);
+							}
 						}
 					}
 				}
 
-				$arrResults = array_values($arrResults);
+				$arrResult = array_values($arrResult);
 			}
 
-			$count = count($arrResults);
+			$count = count($arrResult);
 
 			// No results
 			if ($count < 1)
 			{
 				$this->Template->header = sprintf($GLOBALS['TL_LANG']['MSC']['sEmpty'], $strKeywords);
 				$this->Template->duration = substr($query_endtime-$query_starttime, 0, 6) . ' ' . $GLOBALS['TL_LANG']['MSC']['seconds'];
-
 				return;
 			}
 
@@ -213,14 +196,21 @@ class ModuleRootSearch extends Module
 
 			// Pagination
 			if ($this->perPage > 0)
-			{	
-				$page = $this->Input->get('page') ? $this->Input->get('page') : 1;
-				$per_page = $this->Input->get('per_page') ? $this->Input->get('per_page') : $this->perPage;
+			{
+				$id = 'page_s' . $this->id;
+				$page = \Input::get($id) ?: 1;
+				$per_page = \Input::get('per_page') ?: $this->perPage;
 
-				// Reset page navigator if page exceeds the lower or upper limit
-				if ($page > ceil($count/$per_page) || $page < 1)
+				// Do not index or cache the page if the page number is outside the range
+				if ($page < 1 || $page > max(ceil($count/$per_page), 1))
 				{
-					$page = 1;
+					global $objPage;
+					$objPage->noSearch = 1;
+					$objPage->cache = 0;
+
+					// Send a 404 header
+					header('HTTP/1.1 404 Not Found');
+					return;
 				}
 
 				$from = (($page - 1) * $per_page) + 1;
@@ -229,40 +219,33 @@ class ModuleRootSearch extends Module
 				// Pagination menu
 				if ($to < $count || $from > 1)
 				{
-					$objPagination = new Pagination($count, $per_page);
+					$objPagination = new \Pagination($count, $per_page, $GLOBALS['TL_CONFIG']['maxPaginationLinks'], $id);
 					$this->Template->pagination = $objPagination->generate("\n  ");
 				}
 			}
 
-			// Get results
+			// Get the results
 			for ($i=($from-1); $i<$to && $i<$count; $i++)
 			{
-				$strHref = $arrResults[$i]['url'];
+				$objTemplate = new \FrontendTemplate($this->searchTpl ?: 'search_default');
 
-				if (!$GLOBALS['TL_CONFIG']['rewriteURL'] && !$GLOBALS['TL_CONFIG']['disableAlias'])
-				{
-					$strHref = 'index.php/' . $strHref;
-				}
-
-				$objTemplate = new FrontendTemplate((strlen($this->searchTpl) ? $this->searchTpl : 'search_default'));
-
-				$objTemplate->url = $arrResults[$i]['url'];
-				$objTemplate->link = $arrResults[$i]['title'];
-				$objTemplate->href = $this->Environment->base . $strHref;
-				$objTemplate->title = specialchars($arrResults[$i]['title']);
+				$objTemplate->url = $arrResult[$i]['url'];
+				$objTemplate->link = $arrResult[$i]['title'];
+				$objTemplate->href = $arrResult[$i]['url'];
+				$objTemplate->title = specialchars($arrResult[$i]['title']);
 				$objTemplate->class = (($i == ($from - 1)) ? 'first ' : '') . (($i == ($to - 1) || $i == ($count - 1)) ? 'last ' : '') . (($i % 2 == 0) ? 'even' : 'odd');
-				$objTemplate->relevance = number_format($arrResults[$i]['relevance'] / $arrResults[0]['relevance'] * 100, 2);
-				$objTemplate->filesize = $arrResults[$i]['filesize'];
-				$objTemplate->matches = $arrResults[$i]['matches'];
+				$objTemplate->relevance = sprintf($GLOBALS['TL_LANG']['MSC']['relevance'], number_format($arrResult[$i]['relevance'] / $arrResult[0]['relevance'] * 100, 2) . '%');
+				$objTemplate->filesize = $arrResult[$i]['filesize'];
+				$objTemplate->matches = $arrResult[$i]['matches'];
 
 				$arrContext = array();
-				$arrMatches = trimsplit(',', $arrResults[$i]['matches']);
+				$arrMatches = trimsplit(',', $arrResult[$i]['matches']);
 
-				// Get context
+				// Get the context
 				foreach ($arrMatches as $strWord)
 				{
 					$arrChunks = array();
-					preg_match_all('/\b.{0,'.$this->contextLength.'}\PL' . $strWord . '\PL.{0,'.$this->contextLength.'}\b/ui', $arrResults[$i]['text'], $arrChunks);
+					preg_match_all('/(^|\b.{0,'.$this->contextLength.'}\PL)' . str_replace('+', '\\+', $strWord) . '(\PL.{0,'.$this->contextLength.'}\b|$)/ui', $arrResult[$i]['text'], $arrChunks);
 
 					foreach ($arrChunks[0] as $strContext)
 					{
@@ -270,12 +253,10 @@ class ModuleRootSearch extends Module
 					}
 				}
 
-				// Shorten context and highlight keywords
-				if (count($arrContext))
+				// Shorten the context and highlight all keywords
+				if (!empty($arrContext))
 				{
-					$this->import('String');
-
-					$objTemplate->context = trim($this->String->substrHtml(implode('…', $arrContext), $this->totalLength));
+					$objTemplate->context = trim(\String::substrHtml(implode('…', $arrContext), $this->totalLength));
 					$objTemplate->context = preg_replace('/(\PL)(' . implode('|', $arrMatches) . ')(\PL)/ui', '$1<span class="highlight">$2</span>$3', $objTemplate->context);
 
 					$objTemplate->hasContext = true;
@@ -289,4 +270,3 @@ class ModuleRootSearch extends Module
 		}
 	}
 }
-
