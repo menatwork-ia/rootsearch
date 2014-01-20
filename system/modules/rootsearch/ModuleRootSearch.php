@@ -22,6 +22,7 @@ class ModuleRootSearch extends \Module
 	 */
 	protected $strTemplate = 'mod_search';
 
+    protected $arrBaseUrl = array();
 
 	/**
 	 * Display a wildcard in the back end
@@ -231,9 +232,9 @@ class ModuleRootSearch extends \Module
 			{
 				$objTemplate = new \FrontendTemplate($this->searchTpl ?: 'search_default');
 
-				$objTemplate->url = $arrResult[$i]['url'];
+				$objTemplate->url = $this->getBaseUrl($arrResult[$i]['pid']) . $arrResult[$i]['url'];
 				$objTemplate->link = $arrResult[$i]['title'];
-				$objTemplate->href = $arrResult[$i]['url'];
+				$objTemplate->href = $this->getBaseUrl($arrResult[$i]['pid']) . $arrResult[$i]['url'];
 				$objTemplate->title = specialchars($arrResult[$i]['title']);
 				$objTemplate->class = (($i == ($from - 1)) ? 'first ' : '') . (($i == ($to - 1) || $i == ($count - 1)) ? 'last ' : '') . (($i % 2 == 0) ? 'even' : 'odd');
 				$objTemplate->relevance = sprintf($GLOBALS['TL_LANG']['MSC']['relevance'], number_format($arrResult[$i]['relevance'] / $arrResult[0]['relevance'] * 100, 2) . '%');
@@ -271,4 +272,59 @@ class ModuleRootSearch extends \Module
 			$this->Template->duration = substr($query_endtime-$query_starttime, 0, 6) . ' ' . $GLOBALS['TL_LANG']['MSC']['seconds'];
 		}
 	}
+    
+	/**
+	*
+	* @param type $objPage
+	* @return array
+	*/
+	public function getBaseUrl($intId) {
+
+		if (!strlen($intId) ||$intId < 1)
+		{
+			   return array();
+		}
+
+		//check for cached results
+		if (isset($this->arrBaseUrl[$intId]))
+		{
+			return $this->arrBaseUrl[$intId];
+		}
+
+		$objPage = $this->Database->prepare("SELECT * FROM tl_page WHERE id=?")
+									   ->limit(1)
+									   ->execute($intId);
+
+		if ($objPage->numRows < 1)
+		{
+			return array();
+		}
+
+		if ($objPage->type != 'root')
+		{
+			$strUrl= $this->getBaseUrl($objPage->pid);
+		}
+		else
+		{
+			if ($objPage->dns != '')
+			{
+				if ($this->Environment->ssl)
+				{
+					$strProtocol = 'https';
+				}
+				else {
+					$strProtocol = 'http';
+				}
+
+				$strUrl = $strProtocol . '://' . $objPage->dns . TL_PATH . '/';
+			}
+			else
+			{
+				$strUrl = '';  
+			}
+		}
+		return $this->arrBaseUrl[$objPage->id] = $strUrl;
+	}
+
+
 }
