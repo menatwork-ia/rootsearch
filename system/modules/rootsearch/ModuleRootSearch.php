@@ -3,9 +3,9 @@
 /**
  * Contao Open Source CMS
  *
- * @copyright  MEN AT WORK 2014 
+ * @copyright  MEN AT WORK 2014
  * @package    rootsearch
- * @license    GNU/LGPL 
+ * @license    GNU/LGPL
  * @filesource
  */
 
@@ -42,7 +42,7 @@ class ModuleRootSearch extends \Module
 
 			return $objTemplate->parse();
 		}
-		
+
 		$this->searchRoots = deserialize($this->searchRoots);
 		if (!is_array($this->searchRoots) || !count($this->searchRoots))
 			return '';
@@ -56,6 +56,9 @@ class ModuleRootSearch extends \Module
 	 */
 	protected function compile()
 	{
+		$currentPage = $GLOBALS['objPage'];
+		$currentPage = $currentPage->id;
+
 		// Mark the x and y parameter as used (see #4277)
 		if (isset($_GET['x']))
 		{
@@ -105,7 +108,7 @@ class ModuleRootSearch extends \Module
 		$this->Template->results = '';
 
 		// Execute the search if there are keywords
-		if ($strKeywords != '' && $strKeywords != '*' && !$this->jumpTo)
+		if ($strKeywords != '' && $strKeywords != '*' && (!$this->jumpTo || $this->jumpTo == $currentPage))
 		{
 			// Get the pages
 			$arrPages = $this->Database->getChildRecords($this->searchRoots, 'tl_page');
@@ -118,7 +121,7 @@ class ModuleRootSearch extends \Module
 			}
 
 			$arrResult = null;
-			$strChecksum = md5($strKeywords.\Input::get('query_type').$intRootId.$this->fuzzy);
+			$strChecksum = md5($strKeywords.\Input::get('query_type') . $intRootId . $this->fuzzy);
 			$query_starttime = microtime(true);
 			$strCacheFile = 'system/cache/search/' . $strChecksum . '.json';
 
@@ -272,7 +275,7 @@ class ModuleRootSearch extends \Module
 			$this->Template->duration = substr($query_endtime-$query_starttime, 0, 6) . ' ' . $GLOBALS['TL_LANG']['MSC']['seconds'];
 		}
 	}
-    
+
 	/**
 	*
 	* @param type $objPage
@@ -320,7 +323,7 @@ class ModuleRootSearch extends \Module
 			}
 			else
 			{
-				$strUrl = '';  
+				$strUrl = '';
 			}
 		}
 		return $this->arrBaseUrl[$objPage->id] = $strUrl;
