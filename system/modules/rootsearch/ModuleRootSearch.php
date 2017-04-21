@@ -235,9 +235,10 @@ class ModuleRootSearch extends \Module
 			{
 				$objTemplate = new \FrontendTemplate($this->searchTpl ?: 'search_default');
 
-				$objTemplate->url = $this->getBaseUrl($arrResult[$i]['pid']) . $arrResult[$i]['url'];
+				$strBase = stripos($arrResult[$i]['url'], 'http') !== 0 ? $this->getBaseUrl($arrResult[$i]['pid']) : '';
+				$objTemplate->url = $strBase . $arrResult[$i]['url'];
 				$objTemplate->link = $arrResult[$i]['title'];
-				$objTemplate->href = $this->getBaseUrl($arrResult[$i]['pid']) . $arrResult[$i]['url'];
+				$objTemplate->href = $strBase . $arrResult[$i]['url'];
 				$objTemplate->title = specialchars($arrResult[$i]['title']);
 				$objTemplate->class = (($i == ($from - 1)) ? 'first ' : '') . (($i == ($to - 1) || $i == ($count - 1)) ? 'last ' : '') . (($i % 2 == 0) ? 'even' : 'odd');
 				$objTemplate->relevance = sprintf($GLOBALS['TL_LANG']['MSC']['relevance'], number_format($arrResult[$i]['relevance'] / $arrResult[0]['relevance'] * 100, 2) . '%');
