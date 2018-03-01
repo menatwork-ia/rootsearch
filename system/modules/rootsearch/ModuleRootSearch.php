@@ -83,8 +83,8 @@ class ModuleRootSearch extends \Module
 		{
 			$this->queryType = \Input::get('query_type');
 		}
-
-		$objFormTemplate = new \FrontendTemplate((($this->searchType == 'advanced') ? 'mod_search_advanced' : 'mod_search_simple'));
+		
+        $objFormTemplate = new \FrontendTemplate((($this->searchType == 'advanced') ? 'mod_search' : 'mod_search'));
 
 		$objFormTemplate->uniqueId = $this->id;
 		$objFormTemplate->queryType = $this->queryType;
@@ -263,8 +263,8 @@ class ModuleRootSearch extends \Module
 				// Shorten the context and highlight all keywords
 				if (!empty($arrContext))
 				{
-					$objTemplate->context = trim(\String::substrHtml(implode('…', $arrContext), $this->totalLength));
-					$objTemplate->context = preg_replace('/(\PL)(' . implode('|', $arrMatches) . ')(\PL)/ui', '$1<span class="highlight">$2</span>$3', $objTemplate->context);
+                    $objTemplate->context = trim(\StringUtil::substrHtml(implode('…', $arrContext), $this->totalLength));
+                    $objTemplate->context = preg_replace('/(\PL)(' . implode('|', $arrMatches) . ')(\PL)/ui', '$1<mark class="highlight">$2</mark>$3', $objTemplate->context);
 
 					$objTemplate->hasContext = true;
 				}
