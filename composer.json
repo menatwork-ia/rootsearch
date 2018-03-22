@@ -4,7 +4,7 @@
 	"keywords":["search","root pages","search engine"],
 	"type":"contao-module",
 	"homepage":"http://www.men-at-work.de",
-	"license":"LGPL-3.0+",
+	"license":"LGPL-3.0-or-later",
 	"authors":[
 		{
 			"name":"Andreas Isaak",
