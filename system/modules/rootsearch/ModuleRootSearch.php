@@ -9,6 +9,8 @@
  * @filesource
  */
 
+use Contao\CoreBundle\ContaoCoreBundle;
+
 /**
  * Class ModuleSearch
  * Based on ModuleSearch from Contao 3.1.5
@@ -22,7 +24,12 @@ class ModuleRootSearch extends \Module
 	 */
 	protected $strTemplate = 'mod_search';
 
-    protected $arrBaseUrl = array();
+	/**
+	 * Base url cache
+	 * @var array
+	 */
+	protected $arrBaseUrl = array();
+
 
 	/**
 	 * Display a wildcard in the back end
@@ -45,7 +52,9 @@ class ModuleRootSearch extends \Module
 
 		$this->searchRoots = deserialize($this->searchRoots);
 		if (!is_array($this->searchRoots) || !count($this->searchRoots))
+		{
 			return '';
+		}
 
 		return parent::generate();
 	}
@@ -74,35 +83,57 @@ class ModuleRootSearch extends \Module
 			$_GET['per_page'] = \Input::post('per_page');
 		}
 
+		$blnFuzzy = $this->fuzzy;
+		$strQueryType = \Input::get('query_type') ?: $this->queryType;
+
 		// Remove insert tags
 		$strKeywords = trim(\Input::get('keywords'));
 		$strKeywords = preg_replace('/\{\{[^\}]*\}\}/', '', $strKeywords);
 
-		// Overwrite the default query_type
-		if (\Input::get('query_type'))
+		if (\class_exists(ContaoCoreBundle::class))
 		{
-			$this->queryType = \Input::get('query_type');
+			$this->Template->uniqueId = $this->id;
+			$this->Template->queryType = $strQueryType;
+			$this->Template->keyword = \StringUtil::specialchars($strKeywords);
+			$this->Template->keywordLabel = $GLOBALS['TL_LANG']['MSC']['keywords'];
+			$this->Template->optionsLabel = $GLOBALS['TL_LANG']['MSC']['options'];
+			$this->Template->search = \StringUtil::specialchars($GLOBALS['TL_LANG']['MSC']['searchLabel']);
+			$this->Template->matchAll = \StringUtil::specialchars($GLOBALS['TL_LANG']['MSC']['matchAll']);
+			$this->Template->matchAny = \StringUtil::specialchars($GLOBALS['TL_LANG']['MSC']['matchAny']);
+			$this->Template->action = ampersand(\Environment::get('indexFreeRequest'));
+			$this->Template->advanced = ($this->searchType == 'advanced');
+
+			// Redirect page
+			if ($this->jumpTo && ($objTarget = $this->objModel->getRelated('jumpTo')) instanceof PageModel)
+			{
+				/** @var PageModel $objTarget */
+				$this->Template->action = $objTarget->getFrontendUrl();
+			}
+		}
+		else
+		{
+			$objFormTemplate = new \FrontendTemplate((($this->searchType == 'advanced') ? 'mod_search_advanced' : 'mod_search_simple'));
+
+			$objFormTemplate->uniqueId = $this->id;
+			$objFormTemplate->queryType = $strQueryType;
+			$objFormTemplate->keyword = specialchars($strKeywords);
+			$objFormTemplate->keywordLabel = $GLOBALS['TL_LANG']['MSC']['keywords'];
+			$objFormTemplate->optionsLabel = $GLOBALS['TL_LANG']['MSC']['options'];
+			$objFormTemplate->search = specialchars($GLOBALS['TL_LANG']['MSC']['searchLabel']);
+			$objFormTemplate->matchAll = specialchars($GLOBALS['TL_LANG']['MSC']['matchAll']);
+			$objFormTemplate->matchAny = specialchars($GLOBALS['TL_LANG']['MSC']['matchAny']);
+			$objFormTemplate->id = ($GLOBALS['TL_CONFIG']['disableAlias'] && \Input::get('id')) ? \Input::get('id') : false;
+			$objFormTemplate->action = ampersand(\Environment::get('indexFreeRequest'));
+
+			// Redirect page
+			if ($this->jumpTo && ($objTarget = $this->objModel->getRelated('jumpTo')) !== null)
+			{
+				$objFormTemplate->action = $this->generateFrontendUrl($objTarget->row());
+			}
+
+			$this->Template->form = $objFormTemplate->parse();
 		}
 
-
-		$objFormTemplate->uniqueId = $this->id;
-		$objFormTemplate->queryType = $this->queryType;
-		$objFormTemplate->keyword = specialchars($strKeywords);
-		$objFormTemplate->keywordLabel = $GLOBALS['TL_LANG']['MSC']['keywords'];
-		$objFormTemplate->optionsLabel = $GLOBALS['TL_LANG']['MSC']['options'];
-		$objFormTemplate->search = specialchars($GLOBALS['TL_LANG']['MSC']['searchLabel']);
-		$objFormTemplate->matchAll = specialchars($GLOBALS['TL_LANG']['MSC']['matchAll']);
-		$objFormTemplate->matchAny = specialchars($GLOBALS['TL_LANG']['MSC']['matchAny']);
-		$objFormTemplate->id = ($GLOBALS['TL_CONFIG']['disableAlias'] && \Input::get('id')) ? \Input::get('id') : false;
-		$objFormTemplate->action = ampersand(\Environment::get('indexFreeRequest'));
-
-		// Redirect page
-		if ($this->jumpTo && ($objTarget = $this->objModel->getRelated('jumpTo')) !== null)
-		{
-			$objFormTemplate->action = $this->generateFrontendUrl($objTarget->row());
-		}
-
-		$this->Template->form = $objFormTemplate->parse();
 		$this->Template->pagination = '';
 		$this->Template->results = '';
 
@@ -112,15 +143,25 @@ class ModuleRootSearch extends \Module
 			// Get the pages
 			$arrPages = $this->Database->getChildRecords($this->searchRoots, 'tl_page');
 
+			// HOOK: add custom logic (see #5223)
+			if (isset($GLOBALS['TL_HOOKS']['customizeSearch']) && \is_array($GLOBALS['TL_HOOKS']['customizeSearch']))
+			{
+				foreach ($GLOBALS['TL_HOOKS']['customizeSearch'] as $callback)
+				{
+					$this->import($callback[0]);
+					$this->{$callback[0]}->{$callback[1]}($arrPages, $strKeywords, $strQueryType, $blnFuzzy, $this);
+				}
+			}
+
 			// Return if there are no pages
-			if (!is_array($arrPages) || empty($arrPages))
+			if (empty($arrPages) || !\is_array($arrPages))
 			{
 				$this->log('No searchable pages found', 'ModuleSearch compile()', TL_ERROR);
 				return;
 			}
 
 			$arrResult = null;
-			$strChecksum = md5($strKeywords.\Input::get('query_type') . $intRootId . $this->fuzzy);
+			$strChecksum = md5($strKeywords . $strQueryType . $intRootId . $blnFuzzy);
 			$query_starttime = microtime(true);
 			$strCacheFile = 'system/cache/search/' . $strChecksum . '.json';
 
@@ -144,12 +185,12 @@ class ModuleRootSearch extends \Module
 			{
 				try
 				{
-					$objSearch = \Search::searchFor($strKeywords, (\Input::get('query_type') == 'or'), $arrPages, 0, 0, $this->fuzzy);
+					$objSearch = \Search::searchFor($strKeywords, ($strQueryType == 'or'), $arrPages, 0, 0, $blnFuzzy);
 					$arrResult = $objSearch->fetchAllAssoc();
 				}
 				catch (\Exception $e)
 				{
-					$this->log('Website search failed: ' . $e->getMessage(), 'ModuleSearch compile()', TL_ERROR);
+					$this->log('Website search failed: ' . $e->getMessage(), __METHOD__, TL_ERROR);
 					$arrResult = array();
 				}
 
@@ -159,7 +200,7 @@ class ModuleRootSearch extends \Module
 			$query_endtime = microtime(true);
 
 			// Sort out protected pages
-			if ($GLOBALS['TL_CONFIG']['indexProtected'] && !BE_USER_LOGGED_IN)
+			if (\Config::get('indexProtected') && !BE_USER_LOGGED_IN)
 			{
 				$this->import('FrontendUser', 'User');
 
@@ -175,7 +216,7 @@ class ModuleRootSearch extends \Module
 						{
 							$groups = deserialize($v['groups']);
 
-							if (!is_array($groups) || empty($groups) || !count(array_intersect($groups, $this->User->groups)))
+							if (empty($groups) || !\is_array($groups) || !\count(array_intersect($groups, $this->User->groups)))
 							{
 								unset($arrResult[$k]);
 							}
@@ -186,7 +227,10 @@ class ModuleRootSearch extends \Module
 				$arrResult = array_values($arrResult);
 			}
 
-			$count = count($arrResult);
+			$count = \count($arrResult);
+
+			$this->Template->count = $count;
+			$this->Template->keywords = $strKeywords;
 
 			// No results
 			if ($count < 1)
@@ -224,7 +268,7 @@ class ModuleRootSearch extends \Module
 				// Pagination menu
 				if ($to < $count || $from > 1)
 				{
-					$objPagination = new \Pagination($count, $per_page, $GLOBALS['TL_CONFIG']['maxPaginationLinks'], $id);
+					$objPagination = new \Pagination($count, $per_page, \Config::get('maxPaginationLinks'), $id);
 					$this->Template->pagination = $objPagination->generate("\n  ");
 				}
 			}
