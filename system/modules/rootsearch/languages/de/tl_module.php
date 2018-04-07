@@ -12,4 +12,4 @@
 /**
  * Fields
  */
-$GLOBALS['TL_LANG']['tl_module']['searchRoots'] = array('Search root pages', 'Please select the root pages you want to search in.');
+$GLOBALS['TL_LANG']['tl_module']['searchRoots'] = array('Startpunkte durchsuchen', 'Bitte wählen Sie die Website Startpunkte aus, die durchsucht werden sollen.');
